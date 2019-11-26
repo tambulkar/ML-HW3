@@ -74,7 +74,12 @@ def extract_dictionary(infile):
     with open(infile, 'r') as fid :
         ### ========== TODO : START ========== ###
         # part 1a: process each line to populate word_list
-        pass
+        word_set = set()
+        for line in fid:
+            words = extract_words(line)
+            word_set.update(set(words))
+        for i, word in enumerate(word_set):
+            word_list[word] = i
         ### ========== TODO : END ========== ###
 
     return word_list
@@ -105,9 +110,11 @@ def extract_feature_vectors(infile, word_list):
     with open(infile, 'r') as fid :
         ### ========== TODO : START ========== ###
         # part 1b: process each line to populate feature_matrix
-        pass
+        for i, line in enumerate(fid):
+            words = set(extract_words(line))
+            for word in words:
+                feature_matrix[i, word_list[word]] = 1
         ### ========== TODO : END ========== ###
-        
     return feature_matrix
 
 
@@ -137,6 +144,12 @@ def performance(y_true, y_pred, metric="accuracy"):
     
     ### ========== TODO : START ========== ###
     # part 2a: compute classifier performance
+    if metric == 'accuracy':
+        return metrics.accuracy_score(y_true, np.sign(y_pred))
+    elif metric == 'f1_score':
+        return metrics.f1_score(y_true, np.sign(y_pred))
+    elif metric == 'auroc':
+        return metrics.roc_auc_score(y_true, y_pred)
     return 0
     ### ========== TODO : END ========== ###
 
@@ -164,8 +177,15 @@ def cv_performance(clf, X, y, kf, metric="accuracy"):
     """
     
     ### ========== TODO : START ========== ###
-    # part 2b: compute average cross-validation performance    
-    return 0
+    # part 2b: compute average cross-validation performance
+    score = 0
+    for train_index, test_index in kf.split(X,y):
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+        clf.fit(X_train, y_train)
+        y_pred = clf.decision_function(X_test)
+        score += performance(y_test, y_pred, metric)
+    return score / 5
     ### ========== TODO : END ========== ###
 
 
@@ -194,7 +214,17 @@ def select_param_linear(X, y, kf, metric="accuracy"):
     
     ### ========== TODO : START ========== ###
     # part 2: select optimal hyperparameter using cross-validation
-    return 1.0
+    best_c = None
+    best_perf = float('-inf')
+    for c in C_range:
+        clf = SVC(kernel='linear', C=c)
+        perf = cv_performance(clf, X, y, kf, metric)
+        print(c, perf)
+        if perf > best_perf:
+            best_perf = perf
+            best_c = c
+
+    return best_c
     ### ========== TODO : END ========== ###
 
 
@@ -220,8 +250,8 @@ def performance_test(clf, X, y, metric="accuracy"):
 
     ### ========== TODO : START ========== ###
     # part 3: return performance on test data by first computing predictions and then calling performance
-
-    score = 0        
+    y_pred = clf.decision_function(X)
+    score = performance(y, y_pred, metric)
     return score
     ### ========== TODO : END ========== ###
 
@@ -242,14 +272,25 @@ def main() :
     
     ### ========== TODO : START ========== ###
     # part 1: split data into training (training + cross-validation) and testing set
+    X_train, X_test = X[:560, :], X[560:, :]
+    y_train, y_test = y[:560], y[560:]
     
     # part 2: create stratified folds (5-fold CV)
+    kf = StratifiedKFold(n_splits=5, shuffle=True)
     
     # part 2: for each metric, select optimal hyperparameter for linear-kernel SVM using CV
+    optimal_c = dict()
+    for metric in metric_list:
+        optimal_c[metric] = select_param_linear(X, y, kf, metric=metric)
         
     # part 3: train linear-kernel SVMs with selected hyperparameters
     
     # part 3: report performance on test data
+    for metric in metric_list:
+        clf = SVC(kernel='linear', C=optimal_c[metric])
+        clf.fit(X_train, y_train)
+        print(metric, performance_test(clf, X_test, y_test, metric))
+
     
     ### ========== TODO : END ========== ###
     
